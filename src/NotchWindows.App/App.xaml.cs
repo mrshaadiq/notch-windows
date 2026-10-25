@@ -4,6 +4,7 @@ using Application = System.Windows.Application;
 using System.Windows.Threading;
 using Microsoft.Extensions.Logging;
 using NotchWindows.Core;
+using NotchWindows.Native;
 
 namespace NotchWindows.App;
 
@@ -14,6 +15,7 @@ public partial class App : Application
     private Shell.PillWindow? _pill;
     private Tray.TrayIcon? _tray;
     private AppSettings _settings = new();
+    private DispatcherTimer? _fullscreenTimer;
 
     private static readonly string SettingsPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -38,6 +40,20 @@ public partial class App : Application
         _pill.Show();
 
         _tray = new Tray.TrayIcon(_settings.IdleBarEnabled, SetIdleBarEnabled, ExitApp);
+
+        _fullscreenTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _fullscreenTimer.Tick += (_, _) => CheckFullscreen();
+        _fullscreenTimer.Start();
+    }
+
+    private void CheckFullscreen()
+    {
+        if (_pill is null) return;
+        bool shouldHide = _settings.HideInFullscreen && FullscreenDetector.IsBusy();
+        if (shouldHide && _pill.IsVisible)
+            _pill.Hide();
+        else if (!shouldHide && !_pill.IsVisible)
+            _pill.Show();
     }
 
     private void SetIdleBarEnabled(bool enabled)
@@ -69,6 +85,8 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _logger?.LogInformation("Notch exiting");
+        _fullscreenTimer?.Stop();
+        _fullscreenTimer = null;
         DisposeTray();
         _loggerFactory?.Dispose();
         base.OnExit(e);
