@@ -7,4 +7,12 @@
     <RootNamespace>NotchWindows.Native</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NotchWindows.Providers\NotchWindows.Providers.csproj" />
+  </ItemGroup>
+
 </Project>
