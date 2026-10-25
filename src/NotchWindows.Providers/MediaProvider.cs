@@ -8,6 +8,7 @@ public sealed class MediaProvider(IMediaSessionSource source) : IEventProvider
 
     private readonly object _gate = new();
     private string? _lastTitle;
+    private bool _baselined;
     private int _running;
 
     public string Name => "Media";
@@ -25,7 +26,11 @@ public sealed class MediaProvider(IMediaSessionSource source) : IEventProvider
         {
             // Baseline: a track already playing at startup is not a "change".
             var current = Normalize(source.Current);
-            lock (_gate) _lastTitle = current?.Title;
+            lock (_gate)
+            {
+                _lastTitle = current?.Title;
+                _baselined = current != null;
+            }
             if (current != null) PublishAmbient(current); // nothing to clear when there is no session yet
         }
         catch (Exception ex)
@@ -38,6 +43,7 @@ public sealed class MediaProvider(IMediaSessionSource source) : IEventProvider
     {
         if (Interlocked.Exchange(ref _running, 0) == 0) return;
         source.Changed -= OnChanged;
+        lock (_gate) _baselined = false;
     }
 
     private void OnChanged()
@@ -49,7 +55,18 @@ public sealed class MediaProvider(IMediaSessionSource source) : IEventProvider
             bool trackChanged;
             lock (_gate)
             {
-                trackChanged = current != null && current.Title != _lastTitle;
+                // Rule: the first non-null snapshot after Start is the baseline and never raises a
+                // track event (SMTC initializes async, so a song already playing arrives via Changed).
+                // After a later null gap, a non-null snapshot with a different title raises as before.
+                if (current != null && !_baselined)
+                {
+                    _baselined = true;
+                    trackChanged = false;
+                }
+                else
+                {
+                    trackChanged = current != null && current.Title != _lastTitle;
+                }
                 _lastTitle = current?.Title;
             }
             if (trackChanged)

@@ -69,8 +69,7 @@ public class MediaProviderTests
         source.Fire();
         source.Current = new MediaSnapshot("B", "X", true, null);
         source.Fire();
-        Assert.Equal(2, events.Count);
-        var e = events[1];
+        var e = Assert.Single(events);
         Assert.Equal(IslandKind.Media, e.Kind);
         Assert.Equal(EventPriority.Media, e.Priority);
         Assert.Equal(TimeSpan.FromMilliseconds(2500), e.Duration);
@@ -86,7 +85,22 @@ public class MediaProviderTests
         source.Fire();
         source.Current = new MediaSnapshot("A", "X", false, null);
         source.Fire();
-        Assert.Single(events);
+        Assert.Empty(events);
+    }
+
+    [Fact]
+    public void AlreadyPlayingAtStart_NoEventUntilTitleChanges()
+    {
+        var source = new FakeMediaSource { Current = new MediaSnapshot("A", "X", true, null) };
+        var provider = new MediaProvider(source);
+        var events = new List<IslandEvent>();
+        provider.Raised += events.Add;
+        provider.Start();
+        source.Fire();
+        Assert.Empty(events);
+        source.Current = new MediaSnapshot("B", "X", true, null);
+        source.Fire();
+        Assert.Equal("B", Assert.IsType<MediaSnapshot>(Assert.Single(events).Payload).Title);
     }
 
     [Fact]
