@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Interop;
 using Microsoft.Win32;
+using NotchWindows.App.ViewModels;
 using NotchWindows.Core;
 using NotchWindows.Native;
 
@@ -16,6 +17,14 @@ public partial class PillWindow : Window
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         Closed += (_, _) => SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         PlaceTopCenter();
+    }
+
+    // The window owns the view model: it is disposed (StateChanged unsubscribed) when the window closes.
+    public void Attach(IslandViewModel viewModel)
+    {
+        ArgumentNullException.ThrowIfNull(viewModel);
+        Pill.DataContext = viewModel;
+        Closed += (_, _) => viewModel.Dispose();
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)
