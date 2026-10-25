@@ -9,6 +9,7 @@ public partial class App : Application
 {
     private ILoggerFactory? _loggerFactory;
     private ILogger? _logger;
+    private Shell.PillWindow? _pill;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -21,6 +22,9 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
 
         _logger.LogInformation("Notch started");
+
+        _pill = new Shell.PillWindow();
+        _pill.Show();
     }
 
     protected override void OnExit(ExitEventArgs e)

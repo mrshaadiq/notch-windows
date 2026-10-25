@@ -1,0 +1,14 @@
+<Window x:Class="NotchWindows.App.Shell.PillWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        Background="Transparent"
+        ShowActivated="False"
+        Focusable="False"
+        Width="200" Height="32">
+    <Border Background="Black" CornerRadius="0,0,16,16" />
+</Window>

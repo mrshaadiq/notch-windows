@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\NotchWindows.Core\NotchWindows.Core.csproj" />
+    <ProjectReference Include="../NotchWindows.Native/NotchWindows.Native.csproj" />
   </ItemGroup>
 
 </Project>
