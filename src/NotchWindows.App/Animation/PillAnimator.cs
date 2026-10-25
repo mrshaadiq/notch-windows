@@ -17,19 +17,23 @@ public sealed class PillAnimator
 
     private readonly Border _shape;
     private readonly FrameworkElement _content;
+    private readonly AppSettings _settings;
     private Storyboard? _active;
 
-    public PillAnimator(Border shape, FrameworkElement content)
+    public PillAnimator(Border shape, FrameworkElement content, AppSettings settings)
     {
         ArgumentNullException.ThrowIfNull(shape);
         ArgumentNullException.ThrowIfNull(content);
         _shape = shape;
+        ArgumentNullException.ThrowIfNull(settings);
         _content = content;
+        _settings = settings;
     }
 
-    public static Size SizeFor(IslandState state) => state switch
+    // Idle comes from settings; Compact and Expanded are fixed.
+    public Size SizeFor(IslandState state) => state switch
     {
-        IslandState.Idle => new Size(200, 32),
+        IslandState.Idle => new Size(_settings.IdleBarWidth, _settings.IdleBarHeight),
         IslandState.Compact => new Size(260, 32),
         _ => new Size(380, 96),
     };

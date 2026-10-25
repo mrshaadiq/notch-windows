@@ -10,7 +10,7 @@ namespace NotchWindows.App.Shell;
 
 public partial class PillView : UserControl
 {
-    private readonly PillAnimator _animator;
+    private PillAnimator _animator;
     private IslandViewModel? _vm;
     private IslandState _shown = IslandState.Idle;
     private IslandKind? _shownKind;
@@ -18,9 +18,17 @@ public partial class PillView : UserControl
     public PillView()
     {
         InitializeComponent();
-        _animator = new PillAnimator(Shape, ContentText);
+        _animator = new PillAnimator(Shape, ContentText, new AppSettings());
+        _animator.Snap(IslandState.Idle);
         DataContextChanged += OnDataContextChanged;
         Unloaded += (_, _) => Detach();
+    }
+
+    // Idle bar size comes from settings. Call before setting DataContext.
+    public void Configure(AppSettings settings)
+    {
+        _animator = new PillAnimator(Shape, ContentText, settings);
+        _animator.Snap(_shown);
     }
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -54,7 +62,9 @@ public partial class PillView : UserControl
         var kind = vm.Current?.Kind;
         if (state != _shown)
         {
-            ContentText.Text = Describe(vm);
+            // Leaving Expanded: keep the old text so it does not flash while the content fades out.
+            if (state == IslandState.Expanded)
+                ContentText.Text = Describe(vm);
             _animator.Animate(_shown, state);
         }
         else if (state == IslandState.Expanded && kind != _shownKind)

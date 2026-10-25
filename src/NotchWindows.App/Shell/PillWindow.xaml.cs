@@ -20,9 +20,10 @@ public partial class PillWindow : Window
     }
 
     // The window owns the view model: it is disposed (StateChanged unsubscribed) when the window closes.
-    public void Attach(IslandViewModel viewModel)
+    public void Attach(IslandViewModel viewModel, AppSettings? settings = null)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
+        Pill.Configure(settings ?? new AppSettings());
         Pill.DataContext = viewModel;
         Closed += (_, _) => viewModel.Dispose();
     }

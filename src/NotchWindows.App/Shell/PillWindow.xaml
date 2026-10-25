@@ -7,7 +7,7 @@
         Topmost="True"
         ShowInTaskbar="False"
         ResizeMode="NoResize"
-        Background="Transparent"
+        Background="{x:Null}"
         ShowActivated="False"
         Focusable="False"
         Width="400" Height="104">

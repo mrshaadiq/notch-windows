@@ -6,8 +6,7 @@
             CornerRadius="0,0,16,16"
             HorizontalAlignment="Center"
             VerticalAlignment="Top"
-            ClipToBounds="True"
-            Width="200" Height="32">
+            ClipToBounds="True">
         <TextBlock x:Name="ContentText"
                    Foreground="White"
                    FontSize="14"
