@@ -31,6 +31,33 @@ public sealed class IslandViewModel : INotifyPropertyChanged, IDisposable
     // when Current or Ambient may have changed without a state change (e.g. volume -> brightness).
     public void Refresh() => RaiseAll();
 
+    // Mutations go through these wrappers so Refresh always follows the controller call
+    // (Current can change without a state change, and the crossfade keys on Current).
+    // Call on the UI thread (the EventBus dispatcher and the tick timer both do).
+    public void Publish(IslandEvent e)
+    {
+        _controller.Publish(e);
+        Refresh();
+    }
+
+    public void ApplyAmbient(AmbientUpdate u)
+    {
+        _controller.ApplyAmbient(u);
+        Refresh();
+    }
+
+    public void Tick()
+    {
+        _controller.Tick();
+        Refresh();
+    }
+
+    public void Dismiss()
+    {
+        _controller.Dismiss();
+        Refresh();
+    }
+
     public void Dispose()
     {
         if (_disposed)
