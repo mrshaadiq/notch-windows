@@ -10,6 +10,7 @@ public class ProviderHostTests
         public string Name { get; } = name;
         public volatile ProviderStatus StatusValue = ProviderStatus.Stopped;
         public ProviderStatus Status => StatusValue;
+        public Action<FakeProvider>? OnStart { get; set; }
         public Func<bool> ThrowOnStart { get; set; } = () => false;
         public int StartCount => Volatile.Read(ref _startCount);
         public event Action<IslandEvent>? Raised;
@@ -19,6 +20,7 @@ public class ProviderHostTests
         public void Start()
         {
             Interlocked.Increment(ref _startCount);
+            OnStart?.Invoke(this);
             if (ThrowOnStart()) throw new InvalidOperationException("start failed");
             StatusValue = ProviderStatus.Running;
         }
@@ -146,5 +148,43 @@ public class ProviderHostTests
         await Settle();
 
         Assert.Equal(1, p.StartCount);
+    }
+
+    [Fact]
+    public async Task Host_FaultRaisedDuringRestartedStart_DoesNotStall()
+    {
+        var p = new FakeProvider("a");
+        p.OnStart = f => { if (f.StartCount > 1) f.Fault(); };
+        var host = Host([p]);
+        host.StartAll();
+
+        p.Fault();
+
+        await WaitFor(() => host.IsDisabled(p));
+        await Settle();
+        Assert.Equal(3, p.StartCount);
+    }
+
+    [Fact]
+    public async Task Host_FaultThenThrowInStartAll_CountsOnceAndRestartsOnce()
+    {
+        var p = new FakeProvider("a");
+        p.OnStart = f => { if (f.StartCount == 1) f.Fault(); };
+        p.ThrowOnStart = () => p.StartCount == 1;
+        var host = Host([p]);
+
+        host.StartAll();
+
+        await WaitFor(() => p.StartCount >= 2);
+        await Settle();
+        Assert.Equal(2, p.StartCount);
+        Assert.False(host.IsDisabled(p));
+    }
+
+    [Fact]
+    public void Host_NegativeRetryDelay_Throws()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new ProviderHost(new EventBus(), [], TimeSpan.FromSeconds(-1), NullLogger<ProviderHost>.Instance));
     }
 }
