@@ -30,6 +30,8 @@ public sealed class BatteryProvider(IPowerStatusSource source, IClock clock) : I
             source.Changed += OnSourceChanged;
             // First tick after one interval keeps Start non-blocking; the timer callback runs on the thread pool.
             _timer = new Timer(_ => Poll(), null, PollInterval, PollInterval);
+            // Take the baseline right away without blocking Start. Poll guards on Running, so a racing Stop is safe.
+            ThreadPool.QueueUserWorkItem(_ => Poll());
         }
     }
 
@@ -79,7 +81,7 @@ public sealed class BatteryProvider(IPowerStatusSource source, IClock clock) : I
         // Raise outside the lock so handlers cannot deadlock Stop.
         try
         {
-            if (evt is not null) Raised?.Invoke(evt);
+            if (evt is not null && Status == ProviderStatus.Running) Raised?.Invoke(evt);
             if (fault is not null && Status == ProviderStatus.Running) Faulted?.Invoke(fault);
         }
         catch

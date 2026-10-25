@@ -24,7 +24,15 @@ public class BatteryProviderTests
         var events = new List<IslandEvent>();
         provider.Raised += events.Add;
         provider.Start();
+        // Start queues the baseline read on the thread pool; wait for it so tests are deterministic.
+        WaitFor(() => source.Reads >= 1);
         return (provider, source, events);
+    }
+
+    private static void WaitFor(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(1);
+        while (!condition() && DateTime.UtcNow < deadline) Thread.Sleep(5);
     }
 
     [Fact]
@@ -139,5 +147,29 @@ public class BatteryProviderTests
     {
         public event Action? Changed { add { } remove { } }
         public PowerSnapshot Read() => throw new InvalidOperationException("boom");
+    }
+
+    [Fact]
+    public void Start_TakesBaselineWithoutPoll_SoEarlyChangeRaises()
+    {
+        var source = new FakePowerSource { Value = new PowerSnapshot(true, 50, false) };
+        var provider = new BatteryProvider(source, new ManualClock());
+        var events = new List<IslandEvent>();
+        provider.Raised += events.Add;
+        provider.Start();
+        WaitFor(() => source.Reads >= 1);
+        source.Value = new PowerSnapshot(true, 50, true);
+        source.RaiseChanged();
+        Assert.Single(events);
+    }
+
+    [Fact]
+    public void Start_NoBattery_BecomesUnavailableWithoutPoll()
+    {
+        var source = new FakePowerSource { Value = new PowerSnapshot(false, null, false) };
+        var provider = new BatteryProvider(source, new ManualClock());
+        provider.Start();
+        WaitFor(() => provider.Status == ProviderStatus.Unavailable);
+        Assert.Equal(ProviderStatus.Unavailable, provider.Status);
     }
 }
