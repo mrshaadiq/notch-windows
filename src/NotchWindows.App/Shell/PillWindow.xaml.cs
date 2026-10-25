@@ -28,6 +28,13 @@ public partial class PillWindow : Window
         Closed += (_, _) => viewModel.Dispose();
     }
 
+    // Applies changed settings (idle bar on/off, size) without restarting.
+    public void ApplySettings(AppSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        Pill.Configure(settings);
+    }
+
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
         User32.MakeNonActivatingToolWindow(new WindowInteropHelper(this).Handle);
