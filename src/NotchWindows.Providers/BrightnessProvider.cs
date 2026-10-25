@@ -83,7 +83,7 @@ public sealed class BrightnessProvider(IBrightnessSource source, IClock clock) :
         // Raise outside the lock so handlers cannot deadlock Stop.
         try
         {
-            if (evt is not null) Raised?.Invoke(evt);
+            if (evt is not null && Status == ProviderStatus.Running) Raised?.Invoke(evt);
             if (fault is not null && Status == ProviderStatus.Running) Faulted?.Invoke(fault);
         }
         catch

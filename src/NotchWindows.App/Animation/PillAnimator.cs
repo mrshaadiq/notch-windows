@@ -19,6 +19,8 @@ public sealed class PillAnimator
     private readonly FrameworkElement _content;
     private readonly AppSettings _settings;
     private Storyboard? _active;
+    // Bumped by Animate, Snap and Crossfade: a stale fade-out's Completed must not swap or fade in.
+    private int _crossfadeToken;
 
     public PillAnimator(Border shape, FrameworkElement content, AppSettings settings)
     {
@@ -41,6 +43,7 @@ public sealed class PillAnimator
     // Sets the pill to a state without animating (initial layout).
     public void Snap(IslandState state)
     {
+        _crossfadeToken++;
         _active?.Stop(_shape);
         _active = null;
         var size = SizeFor(state);
@@ -49,14 +52,18 @@ public sealed class PillAnimator
         _shape.Width = size.Width;
         _shape.Height = size.Height;
         _content.BeginAnimation(UIElement.OpacityProperty, null);
-        _content.Opacity = state == IslandState.Expanded ? 1 : 0;
+        // Compact shows the ambient line, so only Idle hides the content.
+        _content.Opacity = state == IslandState.Idle ? 0 : 1;
     }
 
-    public void Animate(IslandState from, IslandState to)
+    // contentHidden runs once the content has faded out on Expanded -> Compact, so the caller can
+    // swap in the ambient content before it fades back in. Skipped if superseded.
+    public void Animate(IslandState from, IslandState to, Action? contentHidden = null)
     {
         if (from == to)
             return;
 
+        var token = ++_crossfadeToken;
         var source = SizeFor(from);
         var target = SizeFor(to);
         var growing = target.Width * target.Height > source.Width * source.Height;
@@ -67,21 +74,31 @@ public sealed class PillAnimator
         if (to == IslandState.Expanded)
         {
             AddSize(sb, target, ExpandDuration, TimeSpan.Zero, easeOut);
-            AddOpacity(sb, 1, ContentFadeInDuration, ContentFadeInDelay);
+            if (from == IslandState.Compact)
+                AddOpacityFromZero(sb, ContentFadeInDuration, ContentFadeInDelay); // ambient line is visible; hide it first
+            else
+                AddOpacity(sb, 1, ContentFadeInDuration, ContentFadeInDelay);
         }
         else if (from == IslandState.Expanded)
         {
-            // Content fades out first, then the shape shrinks.
-            AddOpacity(sb, 0, ContentFadeOutDuration, TimeSpan.Zero);
+            // Content fades out first, then the shape shrinks; Compact fades its ambient line back in.
+            var fadeOut = AddOpacity(sb, 0, ContentFadeOutDuration, TimeSpan.Zero);
             AddSize(sb, target, CollapseDuration, ContentFadeOutDuration, easeIn);
-        }
-        else if (growing)
-        {
-            AddSize(sb, target, ExpandDuration, TimeSpan.Zero, easeOut);
+            if (to == IslandState.Compact)
+            {
+                if (contentHidden is not null)
+                    fadeOut.Completed += (_, _) => { if (token == _crossfadeToken) contentHidden(); };
+                AddOpacity(sb, 1, ContentFadeInDuration, ContentFadeOutDuration + CollapseDuration);
+            }
         }
         else
         {
-            AddSize(sb, target, CollapseDuration, TimeSpan.Zero, easeIn);
+            // Idle <-> Compact: the Idle size is configurable, so either can be the larger one.
+            AddSize(sb, target, growing ? ExpandDuration : CollapseDuration, TimeSpan.Zero, growing ? easeOut : easeIn);
+            if (to == IslandState.Compact)
+                AddOpacity(sb, 1, ContentFadeInDuration, ContentFadeInDelay);
+            else
+                AddOpacity(sb, 0, ContentFadeOutDuration, TimeSpan.Zero);
         }
 
         // No From values and SnapshotAndReplace: an interrupted animation continues from its current value.
@@ -94,10 +111,13 @@ public sealed class PillAnimator
     {
         ArgumentNullException.ThrowIfNull(swap);
 
+        var token = ++_crossfadeToken;
         var half = TimeSpan.FromTicks(CrossfadeDuration.Ticks / 2);
         var fadeOut = new DoubleAnimation(0, half);
         fadeOut.Completed += (_, _) =>
         {
+            if (token != _crossfadeToken)
+                return;
             swap();
             _content.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, half), HandoffBehavior.SnapshotAndReplace);
         };
@@ -116,9 +136,22 @@ public sealed class PillAnimator
         sb.Children.Add(h);
     }
 
-    private void AddOpacity(Storyboard sb, double to, TimeSpan duration, TimeSpan begin)
+    private DoubleAnimation AddOpacity(Storyboard sb, double to, TimeSpan duration, TimeSpan begin)
     {
         var o = new DoubleAnimation(to, duration) { BeginTime = begin, FillBehavior = FillBehavior.HoldEnd };
+        Storyboard.SetTarget(o, _content);
+        Storyboard.SetTargetProperty(o, new PropertyPath(UIElement.OpacityProperty));
+        sb.Children.Add(o);
+        return o;
+    }
+
+    // Opacity 0 at once, held through the delay, then fades in to 1.
+    private void AddOpacityFromZero(Storyboard sb, TimeSpan duration, TimeSpan delay)
+    {
+        var o = new DoubleAnimationUsingKeyFrames { FillBehavior = FillBehavior.HoldEnd };
+        o.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+        o.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromTimeSpan(delay)));
+        o.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromTimeSpan(delay + duration)));
         Storyboard.SetTarget(o, _content);
         Storyboard.SetTargetProperty(o, new PropertyPath(UIElement.OpacityProperty));
         sb.Children.Add(o);

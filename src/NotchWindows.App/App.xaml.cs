@@ -19,6 +19,9 @@ public partial class App : Application
     private DispatcherTimer? _fullscreenTimer;
     private Bootstrap? _bootstrap;
     private SerilogTraceListener? _traceListener;
+    private Mutex? _instanceMutex;
+
+    private const string InstanceMutexName = @"Local\NotchWindows.SingleInstance";
 
     private static readonly string SettingsPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -28,29 +31,49 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        _loggerFactory = Logging.Create();
-        _logger = _loggerFactory.CreateLogger<App>();
+        // Single instance: a second launch exits quietly, before logging or any UI.
+        _instanceMutex = new Mutex(true, InstanceMutexName, out var createdNew);
+        if (!createdNew)
+        {
+            _instanceMutex.Dispose();
+            _instanceMutex = null;
+            Shutdown(0);
+            return;
+        }
 
-        // Route Trace (e.g. AppSettingsStore load warnings) to Serilog. Before settings load.
-        _traceListener = new SerilogTraceListener(Serilog.Log.Logger);
-        Trace.Listeners.Add(_traceListener);
+        try
+        {
+            _loggerFactory = Logging.Create();
+            _logger = _loggerFactory.CreateLogger<App>();
 
-        DispatcherUnhandledException += OnDispatcherUnhandledException;
-        AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
+            // Route Trace (e.g. AppSettingsStore load warnings) to Serilog. Before settings load.
+            _traceListener = new SerilogTraceListener(Serilog.Log.Logger);
+            Trace.Listeners.Add(_traceListener);
 
-        _logger.LogInformation("Notch started");
+            DispatcherUnhandledException += OnDispatcherUnhandledException;
+            AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
 
-        _settings = AppSettingsStore.Load(SettingsPath);
+            _logger.LogInformation("Notch started");
 
-        _pill = new Shell.PillWindow();
-        // Attaches the view model with the loaded settings, shows the pill, then starts providers.
-        _bootstrap = Bootstrap.Start(this, _pill, _settings, _loggerFactory);
+            _settings = AppSettingsStore.Load(SettingsPath);
 
-        _tray = new Tray.TrayIcon(_settings.IdleBarEnabled, SetIdleBarEnabled, ExitApp);
+            // Tray first: if anything below fails, the user still has an exit path.
+            _tray = new Tray.TrayIcon(_settings.IdleBarEnabled, SetIdleBarEnabled, ExitApp);
 
-        _fullscreenTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _fullscreenTimer.Tick += (_, _) => CheckFullscreen();
-        _fullscreenTimer.Start();
+            _pill = new Shell.PillWindow();
+            // Attaches the view model with the loaded settings, shows the pill, then starts providers.
+            _bootstrap = Bootstrap.Start(this, _pill, _settings, _loggerFactory);
+
+            _fullscreenTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _fullscreenTimer.Tick += (_, _) => CheckFullscreen();
+            _fullscreenTimer.Start();
+        }
+        catch (Exception ex)
+        {
+            // Never leave a running process with no UI and no way to exit.
+            _logger?.LogCritical(ex, "Startup failed");
+            Shutdown(1);
+        }
     }
 
     private void CheckFullscreen()
@@ -104,6 +127,12 @@ public partial class App : Application
             _traceListener = null;
         }
         _loggerFactory?.Dispose();
+        if (_instanceMutex is not null)
+        {
+            _instanceMutex.ReleaseMutex();
+            _instanceMutex.Dispose();
+            _instanceMutex = null;
+        }
         base.OnExit(e);
     }
 

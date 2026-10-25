@@ -13,7 +13,7 @@ public static class AppSettingsStore
         {
             if (!File.Exists(path)) return new AppSettings();
             var json = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<AppSettings>(json, Options) ?? new AppSettings();
+            return Validate(JsonSerializer.Deserialize<AppSettings>(json, Options) ?? new AppSettings());
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or NotSupportedException)
         {
@@ -21,6 +21,24 @@ public static class AppSettingsStore
             return new AppSettings();
         }
     }
+
+    // Max idle bar size is the pill window size (PillWindow.xaml: 400 x 104).
+    private const double MaxIdleBarWidth = 400;
+    private const double MaxIdleBarHeight = 104;
+
+    // Hand-edited files can hold any number; the animator must never get a size it cannot apply.
+    private static AppSettings Validate(AppSettings s)
+    {
+        var defaults = new AppSettings();
+        return s with
+        {
+            IdleBarWidth = Sanitize(s.IdleBarWidth, defaults.IdleBarWidth, MaxIdleBarWidth),
+            IdleBarHeight = Sanitize(s.IdleBarHeight, defaults.IdleBarHeight, MaxIdleBarHeight),
+        };
+    }
+
+    private static double Sanitize(double value, double fallback, double max) =>
+        !double.IsFinite(value) || value <= 0 ? fallback : Math.Min(value, max);
 
     public static void Save(string path, AppSettings settings)
     {

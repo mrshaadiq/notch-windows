@@ -9,9 +9,11 @@ public class BrightnessProviderTests
         public int? Value { get; set; }
         public Exception? Throw { get; set; }
         public int Reads { get; private set; }
+        public Action? OnRead { get; set; }
         public int? Read()
         {
             Reads++;
+            OnRead?.Invoke();
             if (Throw is not null) throw Throw;
             return Value;
         }
@@ -97,6 +99,19 @@ public class BrightnessProviderTests
         provider.Poll();
         provider.Stop();
         source.Value = 90;
+        provider.Poll();
+        Assert.Empty(events);
+        Assert.Equal(ProviderStatus.Stopped, provider.Status);
+    }
+
+    [Fact]
+    public void Poll_StoppedDuringRead_DoesNotRaise()
+    {
+        var (provider, source, events) = Create(10);
+        provider.Poll();
+        source.Value = 90;
+        // Stop lands after the change is detected but before the event is raised.
+        source.OnRead = provider.Stop;
         provider.Poll();
         Assert.Empty(events);
         Assert.Equal(ProviderStatus.Stopped, provider.Status);

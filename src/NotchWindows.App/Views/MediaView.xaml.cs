@@ -28,9 +28,12 @@ public partial class MediaView : System.Windows.Controls.UserControl
     {
         TitleText.Text = snapshot?.Title ?? "";
         ArtistText.Text = snapshot?.Artist ?? "";
-        PlayPauseButton.Content = snapshot is { IsPlaying: true } ? "⏸" : "▶";
+        SetPlaying(snapshot is { IsPlaying: true });
         _ = SetThumbnailAsync(snapshot?.Thumbnail);
     }
+
+    /// <summary>Updates only the play/pause glyph. Must be called on the UI thread.</summary>
+    public void SetPlaying(bool isPlaying) => PlayPauseButton.Content = isPlaying ? "⏸" : "▶";
 
     private async Task SetThumbnailAsync(byte[]? bytes)
     {

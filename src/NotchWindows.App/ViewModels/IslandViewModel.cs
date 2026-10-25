@@ -58,6 +58,13 @@ public sealed class IslandViewModel : INotifyPropertyChanged, IDisposable
         Refresh();
     }
 
+    // Pointer over the pill pauses auto-collapse.
+    public void SetPointerOver(bool over)
+    {
+        _controller.SetPointerOver(over);
+        Refresh();
+    }
+
     public void Dispose()
     {
         if (_disposed)

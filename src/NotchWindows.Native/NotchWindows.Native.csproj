@@ -17,4 +17,8 @@
     <ProjectReference Include="..\NotchWindows.Providers\NotchWindows.Providers.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="NotchWindows.Core.Tests" />
+  </ItemGroup>
+
 </Project>

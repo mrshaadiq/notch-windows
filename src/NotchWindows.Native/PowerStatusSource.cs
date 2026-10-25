@@ -7,6 +7,7 @@ namespace NotchWindows.Native;
 public sealed class PowerStatusSource : IPowerStatusSource, IDisposable
 {
     private const byte NoBatteryFlag = 128;
+    private const byte UnknownBatteryFlag = 255;
     private const byte UnknownPercent = 255;
     private const byte AcOnline = 1;
 
@@ -30,6 +31,7 @@ public sealed class PowerStatusSource : IPowerStatusSource, IDisposable
     private Action? _changed;
     private bool _subscribed;
     private bool _disposed;
+    private PowerSnapshot? _last;
 
     public event Action? Changed
     {
@@ -64,9 +66,23 @@ public sealed class PowerStatusSource : IPowerStatusSource, IDisposable
         if (!GetSystemPowerStatus(out var s))
             throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
 
-        var hasBattery = (s.BatteryFlag & NoBatteryFlag) == 0;
-        int? percent = s.BatteryLifePercent == UnknownPercent ? null : Math.Clamp((int)s.BatteryLifePercent, 0, 100);
-        return new PowerSnapshot(hasBattery, percent, s.ACLineStatus == AcOnline);
+        lock (_gate)
+        {
+            _last = Interpret(s.ACLineStatus, s.BatteryFlag, s.BatteryLifePercent, _last);
+            return _last;
+        }
+    }
+
+    // BatteryFlag 255 means "unknown" (seen briefly on resume): keep the previous reading rather
+    // than reporting "no battery" (255 has the 128 bit set). Without one, assume a battery whose level is unknown.
+    internal static PowerSnapshot Interpret(byte acLineStatus, byte batteryFlag, byte batteryLifePercent, PowerSnapshot? previous)
+    {
+        if (batteryFlag == UnknownBatteryFlag)
+            return previous ?? new PowerSnapshot(true, null, acLineStatus == AcOnline);
+
+        var hasBattery = (batteryFlag & NoBatteryFlag) == 0;
+        int? percent = batteryLifePercent == UnknownPercent ? null : Math.Clamp((int)batteryLifePercent, 0, 100);
+        return new PowerSnapshot(hasBattery, percent, acLineStatus == AcOnline);
     }
 
     private void OnPowerModeChanged(object? sender, PowerModeChangedEventArgs e)
